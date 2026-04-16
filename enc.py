@@ -8,7 +8,7 @@ def enc(bits):
     N = 1024 # size of each OFDM symbol
     CP = 120 # cyclic prefix length
     FS = 44100 # sampling rate in Hz
-    K = 500 # number of tones carrying data per symbol
+    K = 350 # number of tones carrying data per symbol
     TARGET_POWER = 0.00125  # power constraint from lab
 
     # Find the K best tone indices centered around 7500 Hz
@@ -31,16 +31,20 @@ def enc(bits):
     bits_padded[0:len(bits)] = bits
 
     # build the sync symbol
-    # all K tones turned ON so decoder can find where signal starts
     freq_sync = np.zeros(N, dtype=complex)
+    
+    # use a Pseudo-Noise (PN) sequence to prevent the massive time-domain spike
+    np.random.seed(42) # Seed ensures encoder and decoder generate the exact same phases
+    sync_phases = np.random.choice([1.0, -1.0], size=N)
+    
     for k in tone_indices:
-        freq_sync[k]     = 1.0
-        freq_sync[N - k] = 1.0
+        freq_sync[k]     = sync_phases[k]
+        freq_sync[N - k] = sync_phases[k]
 
     # convert to time domain
     time_sync = np.real(np.fft.ifft(freq_sync))
 
-    # add cyclic prefix: copy last CP samples to the front
+    # add cyclic prefix
     sync_symbol = np.concatenate([time_sync[-CP:], time_sync])
 
     # build all 400 data symbols
@@ -60,9 +64,10 @@ def enc(bits):
             tone_index = tone_indices[j]
             bit_value  = bits_this_symbol[j]
 
-            # OOK: bit=1 means tone is ON, bit=0 means tone is OFF
-            freq_data[tone_index]     = float(bit_value)
-            freq_data[N - tone_index] = float(bit_value)
+            # apply the PN sequence phase to spread the energy and avoid the t=0 spike
+            phase = sync_phases[tone_index]
+            freq_data[tone_index]     = float(bit_value) * phase
+            freq_data[N - tone_index] = float(bit_value) * phase
 
         # convert to time domain
         time_data = np.real(np.fft.ifft(freq_data))
@@ -78,6 +83,9 @@ def enc(bits):
     current_power = np.mean(signal ** 2)
     scale_factor  = np.sqrt(TARGET_POWER / current_power)
     signal        = signal * scale_factor
+
+    # clip to ensure it's between -1.0 and 1.0
+    signal = np.clip(signal, -1.0, 1.0)
 
     # write tx.wav
     signal_int32 = (np.iinfo(np.int32).max * signal).astype(np.int32)

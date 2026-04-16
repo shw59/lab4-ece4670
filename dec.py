@@ -7,8 +7,11 @@ def dec():
     N = 1024           # FFT size
     CP = 120           # cyclic prefix length
     FS = 44100         # sampling rate
-    K = 500            # number of data tones per symbol
-    NUM_SYMBOLS = 400  # number of data symbols
+    K = 350            # number of data tones per symbol
+    
+    # FIX: Calculate the number of symbols dynamically so it always processes all 200,000 bits
+    NUM_SYMBOLS = int(np.ceil(200000 / K))  
+    
     SYMBOL_LEN = N + CP  # = 1144 samples per symbol including cyclic prefix
 
     # ---- Step 1: read rx.wav and convert to float ----
@@ -22,37 +25,35 @@ def dec():
     sorted_by_distance = valid_bins[np.argsort(distances)]
     tone_indices = np.sort(sorted_by_distance[:K])
 
-    # ---- Step 3: rebuild the sync symbol (same as enc.py) ----
+    # ---- Step 3: rebuild the sync symbol (matching the new PN sequence) ----
     freq_sync = np.zeros(N, dtype=complex)
+    np.random.seed(42)
+    sync_phases = np.random.choice([1.0, -1.0], size=N)
+    
     for k in tone_indices:
-        freq_sync[k]     = 1.0
-        freq_sync[N - k] = 1.0
+        freq_sync[k]     = sync_phases[k]
+        freq_sync[N - k] = sync_phases[k]
+        
     time_sync = np.real(np.fft.ifft(freq_sync))
     sync_symbol = np.concatenate([time_sync[-CP:], time_sync])
 
     # ---- Step 4: find where the sync symbol starts in the received signal ----
-    # we cross-correlate the received signal with the known sync symbol
-    # the peak of the correlation tells us where the sync symbol is
-
-    # only use the body of the sync symbol for correlation (not the cyclic prefix)
-    sync_body = sync_symbol[CP:]   # length N = 1024
-
+    double_sync = np.concatenate([sync_symbol, sync_symbol])
+    
     # cross correlate
-    correlation = np.correlate(received, sync_body, mode='full')
+    correlation = np.correlate(received, double_sync, mode='full')
     correlation = np.abs(correlation)
 
-    # the peak tells us where sync_body starts in received
-    # np.correlate with mode='full' has an offset of len(sync_body)-1
+    # the peak tells us where the double_sync sequence starts
     peak_index = np.argmax(correlation)
-    sync_start = peak_index - (len(sync_body) - 1)
-
-    # sync_start is where the first sync symbol body begins
-    # but we need to go back CP samples to include the cyclic prefix
-    sync_start = sync_start - CP
+    
+    # FIX: Back off by CP // 2 (60 samples) to absorb the channel delay and center the window
+    sync_start = peak_index - (len(double_sync) - 1) - (CP // 2)
 
     # ---- Step 5: skip past both sync symbols to reach data ----
-    # we sent 2 sync symbols, each of length SYMBOL_LEN
-    data_start = sync_start + 2 * SYMBOL_LEN
+    # sync_start now points directly to the start of the first sync's cyclic prefix!
+    # To reach data, we just add the length of the double_sync we correlated against.
+    data_start = sync_start + len(double_sync)
 
     # ---- Step 6: extract and decode each data symbol ----
     bits_out = np.zeros(NUM_SYMBOLS * K, dtype=int)
@@ -67,12 +68,11 @@ def dec():
     sync1_body = received[sync1_start : sync1_start + N]
     sync1_fft = np.fft.fft(sync1_body)
 
-    # measure average power at our tone indices in the sync symbol
+    # measure exact power at EACH of our tone indices in the sync symbol
     sync_powers = np.abs(sync1_fft[tone_indices]) ** 2
-    avg_on_power = np.mean(sync_powers)
-
-    # threshold is halfway between ON power and zero
-    threshold = avg_on_power / 2.0
+    
+    #  list of thresholds for each frequency channel
+    thresholds = sync_powers / 2.0
 
     # now decode each data symbol
     for i in range(NUM_SYMBOLS):
@@ -92,8 +92,8 @@ def dec():
             tone_index = tone_indices[j]
             power = np.abs(symbol_fft[tone_index]) ** 2
 
-            # OOK decision: above threshold = 1, below = 0
-            if power > threshold:
+            # OOK decision: check against the specific threshold for tone j
+            if power > thresholds[j]:
                 bits_out[i * K + j] = 1
             else:
                 bits_out[i * K + j] = 0
