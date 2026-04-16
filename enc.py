@@ -15,7 +15,7 @@ def enc(bits):
     K = 500 # number of usable tones per OFDM symbol
 
     # start with synchronization symbol (4410 samples of an impulse) + zero-pad to let channel settle
-    X_t = list(generate_imp() * P) + list(np.zeros(2000))
+    X_t = list(generate_imp()) + list(np.zeros(2000))
 
     # partition bits into blocks for OOK encoding (one bit per tone)
     num_blocks = len(bits) // K
@@ -44,7 +44,7 @@ def enc(bits):
         # construct full frequency spectrum to include conjugates to take DFT
         X_freq = np.zeros(OFDM_LEN, dtype=complex)
         X_freq[optimal_indices] = X_f
-        X_freq[OFDM_LEN - K : OFDM_LEN] = np.flip(np.conj(X_f))
+        X_freq[OFDM_LEN - optimal_indices] = np.conj(X_f)
 
         # inverse DFT using FFT
         x_time = fft.ifft(X_freq, norm='ortho').real
