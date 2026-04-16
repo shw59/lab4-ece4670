@@ -14,8 +14,8 @@ def enc(bits):
     OFDM_LEN = 1024 # total length of each OFDM symbol (number of available tones)
     K = 500 # number of usable tones per OFDM symbol
 
-    # start with synchronization symbol (4410 samples of a 1kHz sinusoid) + zero-pad to let channel settle
-    X_t = list(generate_sinusoid(1000)) + list(np.zeros(2000))
+    # start with synchronization symbol (4410 samples of an impulse) + zero-pad to let channel settle
+    X_t = list(generate_imp()) + list(np.zeros(2000))
 
     # partition bits into blocks for OOK encoding (one bit per tone)
     num_blocks = len(bits) // K
@@ -33,7 +33,7 @@ def enc(bits):
         X_freq[OFDM_LEN - K : OFDM_LEN] = np.flip(np.conj(X_f))
 
         # inverse DFT using FFT
-        x_time = fft.ifft(X_freq).real
+        x_time = fft.ifft(X_freq, norm='ortho').real
         
         # add cyclic prefix
         x_time_cp = np.append(x_time[-CP_LEN:], x_time)
@@ -44,13 +44,11 @@ def enc(bits):
     tmp = (np.iinfo(np.int32).max*X_t).astype(np.int32)
     wav.write('tx.wav', 44100, tmp)
 
-def generate_sinusoid(freq, amplitude=1.0, num_samples=4410):
+def generate_imp(sample_rate=44100, num_samples=4410):
     """
-    Generate a sinusoid.
+    Generate an impulse as a numpy array.
     """
-    fs = 44100.0
-    n = np.arange(num_samples)
-    y = amplitude * np.sin(2.0*np.pi*freq* n / fs)
+    x = np.zeros(num_samples)
+    x[0] = 1
 
-    return y
-
+    return x

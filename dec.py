@@ -16,13 +16,12 @@ def dec():
     Fs, Y = wav.read('rx.wav')
     Y = (Y/np.iinfo(np.int32).max)[int(0.1 * Fs):]
 
-
-def generate_sinusoid(freq, amplitude=1.0, num_samples=4410):
+def generate_imp(sample_rate=44100, num_samples=4410):
     """
-    Generate a sinusoid.
+    Generate an impulse as a numpy array.
     """
-    fs = 44100.0
-    n = np.arange(num_samples)
-    y = amplitude * np.sin(2.0*np.pi*freq* n / fs)
+    x = np.zeros(num_samples)
+    x[0] = 1
 
-    return y
+    return x
+
