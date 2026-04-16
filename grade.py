@@ -77,4 +77,4 @@ def run_and_check_figure_of_merit(channel='audio0', use_ccplay=True):
 
 if __name__ == "__main__":
     # Change use_ccplay to False if you want to test your baseline logic first
-    run_and_check_figure_of_merit(channel='audio0', use_ccplay=True)
+    run_and_check_figure_of_merit(channel='audio0', use_ccplay=False)

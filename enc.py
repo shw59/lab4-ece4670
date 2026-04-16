@@ -3,68 +3,85 @@ import scipy.io.wavfile as wav
 import scipy.fft as fft
 
 def enc(bits):
-    """
-    [bits] is a 1-D numpy array containing 200,000 integers that are either 0 or 1.
 
-    Encodes [bits] and generates a 'tx.wav' file for transmission across CommCloud.
-    """
+    # Parameters
+    N = 1024 # size of each OFDM symbol
+    CP = 120 # cyclic prefix length
+    FS = 44100 # sampling rate in Hz
+    K = 500 # number of tones carrying data per symbol
+    TARGET_POWER = 0.00125  # power constraint from lab
 
-    P = 0.00125 # power constraint
-    CP_LEN = 120 # length of cyclic prefix
-    OFDM_LEN = 1024 # total length of each OFDM symbol (number of available tones)
-    K = 500 # number of usable tones per OFDM symbol
+    # Find the K best tone indices centered around 7500 Hz
+    center_bin = int(np.round(7500.0 * N / FS))   # = 174
 
-    # start with synchronization symbol (4410 samples of an impulse) + zero-pad to let channel settle
-    X_t = list(generate_imp()) + list(np.zeros(2000))
+    # all valid positive frequency bins
+    valid_bins = np.arange(1, N // 2)
 
-    # partition bits into blocks for OOK encoding (one bit per tone)
-    num_blocks = len(bits) // K
-
-    # from lab 1, the channel gain peaks at frequency of 7.5kHz, so we want to center our signals around that
-    target_freq = 7500.0
-    center_bin = int(np.round(target_freq * OFDM_LEN / 44100))
-    
-    # get all valid positive frequency bins
-    valid_bins = np.arange(1, OFDM_LEN // 2)
-    
-    # Calculate distance of every bin to the center bin
+    # sort bins by distance to center bin, pick closest K, then sort ascending
     distances = np.abs(valid_bins - center_bin)
-    
-    # sort by distance and pick the K closest bins, then sort indices ascending
-    closest_bins = valid_bins[np.argsort(distances)]
-    optimal_indices = np.sort(closest_bins[:K])
+    sorted_by_distance = valid_bins[np.argsort(distances)]
+    tone_indices = np.sort(sorted_by_distance[:K])
 
-    for i in range(num_blocks):
-        bits_partition = bits[i*K: (i+1)*K]
+    # Figure out how many OFDM symbols we need
+    bits_per_symbol = K
+    num_symbols = int(np.ceil(len(bits) / bits_per_symbol))   # = 400
 
-        gamma = np.sqrt(P * OFDM_LEN / K)
+    # pad bits just in case
+    bits_padded = np.zeros(num_symbols * bits_per_symbol, dtype=int)
+    bits_padded[0:len(bits)] = bits
 
-        X_f = bits_partition * gamma
+    # build the sync symbol
+    # all K tones turned ON so decoder can find where signal starts
+    freq_sync = np.zeros(N, dtype=complex)
+    for k in tone_indices:
+        freq_sync[k]     = 1.0
+        freq_sync[N - k] = 1.0
 
-        # construct full frequency spectrum to include conjugates to take DFT
-        X_freq = np.zeros(OFDM_LEN, dtype=complex)
-        X_freq[optimal_indices] = X_f
-        X_freq[OFDM_LEN - optimal_indices] = np.conj(X_f)
+    # convert to time domain
+    time_sync = np.real(np.fft.ifft(freq_sync))
 
-        # inverse DFT using FFT
-        x_time = fft.ifft(X_freq, norm='ortho').real
-        
+    # add cyclic prefix: copy last CP samples to the front
+    sync_symbol = np.concatenate([time_sync[-CP:], time_sync])
+
+    # build all 400 data symbols
+    all_symbols = []
+
+    for i in range(num_symbols):
+
+        # grab the 500 bits for this symbol
+        start = i * bits_per_symbol
+        end   = start + bits_per_symbol
+        bits_this_symbol = bits_padded[start:end]
+
+        # build frequency domain array for this symbol
+        freq_data = np.zeros(N, dtype=complex)
+
+        for j in range(K):
+            tone_index = tone_indices[j]
+            bit_value  = bits_this_symbol[j]
+
+            # OOK: bit=1 means tone is ON, bit=0 means tone is OFF
+            freq_data[tone_index]     = float(bit_value)
+            freq_data[N - tone_index] = float(bit_value)
+
+        # convert to time domain
+        time_data = np.real(np.fft.ifft(freq_data))
+
         # add cyclic prefix
-        x_time_cp = np.append(x_time[-CP_LEN:], x_time)
-        X_t.extend(x_time_cp)
-        
-    X_t = np.array(X_t)
+        symbol_with_cp = np.concatenate([time_data[-CP:], time_data])
+        all_symbols.append(symbol_with_cp)
 
-    X_t = np.clip(X_t, -1.0, 1.0)
+    # concatenate 2 sync symbols + 400 data symbols
+    signal = np.concatenate([sync_symbol, sync_symbol] + all_symbols)
 
-    tmp = (np.iinfo(np.int32).max*X_t).astype(np.int32)
-    wav.write('tx.wav', 44100, tmp)
+    # scale to meet power constraint
+    current_power = np.mean(signal ** 2)
+    scale_factor  = np.sqrt(TARGET_POWER / current_power)
+    signal        = signal * scale_factor
 
-def generate_imp(sample_rate=44100, num_samples=4410):
-    """
-    Generate an impulse as a numpy array.
-    """
-    x = np.zeros(num_samples)
-    x[0] = 1
+    # write tx.wav
+    signal_int32 = (np.iinfo(np.int32).max * signal).astype(np.int32)
+    wav.write('tx.wav', FS, signal_int32)
 
-    return x
+
+    
