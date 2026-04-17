@@ -4,15 +4,14 @@ import scipy.io.wavfile as wav
 
 def enc(bits):
 
-    # Parameters
     N = 1024 # size of each OFDM symbol
     CP = 200 # cyclic prefix length
-    FS = 44100 # sampling rate in Hz
-    K = 350 # number of tones carrying data per symbol
-    TARGET_POWER = 0.00125  # power constraint from lab
+    FS = 44100 # sampling rate
+    K = 350 # number of tones/frequencies carrying data per symbol
+    P = 0.00125  # power constraint
 
-    # Find the K best tone indices centered around 7500 Hz
-    center_bin = int(np.round(7500.0 * N / FS))   # = 174
+    # center the K tones around the highest gain frequency of ~7.5kHz so we use the highest gain channels
+    center_bin = int(np.round(7500.0 * N / FS))
 
     # all valid positive frequency bins
     valid_bins = np.arange(1, N // 2)
@@ -20,11 +19,11 @@ def enc(bits):
     # sort bins by distance to center bin, pick closest K, then sort ascending
     distances = np.abs(valid_bins - center_bin)
     sorted_by_distance = valid_bins[np.argsort(distances)]
-    tone_indices = np.sort(sorted_by_distance[:K])
+    tone_idxs = np.sort(sorted_by_distance[:K])
 
-    # Figure out how many OFDM symbols we need
+    # number of OFDM symbols needed
     bits_per_symbol = K
-    num_symbols = int(np.ceil(len(bits) / bits_per_symbol))   # = 400
+    num_symbols = int(np.ceil(len(bits) / bits_per_symbol))
 
     # pad bits just in case
     bits_padded = np.zeros(num_symbols * bits_per_symbol, dtype=int)
@@ -33,12 +32,13 @@ def enc(bits):
     # build the sync symbol
     freq_sync = np.zeros(N, dtype=complex)
     
-    # use a Pseudo-Noise (PN) sequence to prevent the massive time-domain spike
-    np.random.seed(42) # Seed ensures encoder and decoder generate the exact same phases
+    # generate phase shifts so the cosine waves in the sync symbol don't become a high-energy impulse
+    np.random.seed(42) # seed to make sure decoder/encoder generate the same phases
     sync_phases = np.random.choice([1.0, -1.0], size=N)
     
-    for k in tone_indices:
-        freq_sync[k]     = sync_phases[k]
+    # assemble the frequency-domain synchronization symbol
+    for k in tone_idxs:
+        freq_sync[k] = sync_phases[k]
         freq_sync[N - k] = sync_phases[k]
 
     # convert to time domain
@@ -61,12 +61,12 @@ def enc(bits):
         freq_data = np.zeros(N, dtype=complex)
 
         for j in range(K):
-            tone_index = tone_indices[j]
-            bit_value  = bits_this_symbol[j]
+            tone_index = tone_idxs[j]
+            bit_value = bits_this_symbol[j]
 
-            # apply the PN sequence phase to spread the energy and avoid the t=0 spike
+            # apply the phase shifts again
             phase = sync_phases[tone_index]
-            freq_data[tone_index]     = float(bit_value) * phase
+            freq_data[tone_index] = float(bit_value) * phase
             freq_data[N - tone_index] = float(bit_value) * phase
 
         # convert to time domain
@@ -81,8 +81,8 @@ def enc(bits):
 
     # scale to meet power constraint
     current_power = np.mean(signal ** 2)
-    scale_factor  = np.sqrt(TARGET_POWER / current_power)
-    signal        = signal * scale_factor
+    scale_factor = np.sqrt(P / current_power)
+    signal = signal * scale_factor
 
     # clip to ensure it's between -1.0 and 1.0
     signal = np.clip(signal, -1.0, 1.0)
