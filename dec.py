@@ -38,7 +38,7 @@ def dec():
         freq_sync[N - k] = sync_phases[k]
 
     # convert to time domain
-    time_sync = np.real(np.fft.ifft(freq_sync))
+    time_sync = np.real(np.fft.ifft(freq_sync, norm='ortho'))
 
     # add cyclic prefix
     sync_symbol = np.concatenate([time_sync[-CP:], time_sync])
@@ -65,7 +65,7 @@ def dec():
     # Get the first sync symbol body after cyclic prefix
     sync1_start = sync_start + CP
     sync1_body = received[sync1_start : sync1_start + N]
-    sync1_fft = np.fft.fft(sync1_body)
+    sync1_fft = np.fft.fft(sync1_body, norm='ortho')
 
     # measure exact power at each of our tone indices in the sync symbol
     sync_powers = np.abs(sync1_fft[tone_idxs]) ** 2
@@ -84,7 +84,7 @@ def dec():
         body = received[body_start : body_start + N]
 
         # take FFT
-        symbol_fft = np.fft.fft(body)
+        symbol_fft = np.fft.fft(body, norm='ortho')
 
         # check power at each tone index
         for j in range(K):
