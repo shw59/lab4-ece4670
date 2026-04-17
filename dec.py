@@ -3,9 +3,9 @@ import scipy.io.wavfile as wav
 
 def dec():
 
-    # ---- Parameters (must match enc.py exactly) ----
+    # Parameters
     N = 1024           # FFT size
-    CP = 120           # cyclic prefix length
+    CP = 256           # cyclic prefix length
     FS = 44100         # sampling rate
     K = 350            # number of data tones per symbol
     

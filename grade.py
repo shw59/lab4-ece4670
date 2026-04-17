@@ -18,11 +18,10 @@ def run_encode():
     print("tx.wav has been successfully generated.")
     print("\nNow, run the channel simulation manually in your terminal.")
     print("Example command (for Windows):")
-    print("python ../ccplay --prepause 2000 --postpause 2000 --channel audio0 tx.wav rx.wav")
+    print("python ccplay --prepause 2000 --postpause 2000 --channel audio0 tx.wav rx.wav")
     print("\nAfter rx.wav is generated, run this script again and choose 'Decode'.")
 
 def run_decode():
-    # Make sure the necessary files exist before trying to decode
     if not os.path.exists('rx.wav'):
         print("\nError: 'rx.wav' not found! Please run the ccplay command in your terminal first.")
         return
@@ -39,10 +38,19 @@ def run_decode():
     print("Loading original bits to check for errors...")
     original_bits = np.load('original_bits.npy')
     
-    # Calculate Bit Errors (N) by directly comparing the arrays
+    # Calculate Bit Errors
     N = np.sum(original_bits != decoded_bits)
     
-    # Read tx.wav to calculate Power (P) and Data Rate (R)
+    # find where errors are clustered
+    error_positions = np.where(original_bits != decoded_bits)[0]
+    if len(error_positions) > 0:
+        print(f"First error at bit position: {error_positions[0]}")
+        print(f"Last error at bit position: {error_positions[-1]}")
+        print(f"Errors in first 10000 bits: {np.sum(original_bits[:10000] != decoded_bits[:10000])}")
+        print(f"Errors in last 10000 bits: {np.sum(original_bits[-10000:] != decoded_bits[-10000:])}")
+        print(f"Errors in middle 10000 bits: {np.sum(original_bits[95000:105000] != decoded_bits[95000:105000])}")
+
+    # Read tx.wav to calculate Power and Data Rate
     fs, X_tx_int = wav.read('tx.wav')
     X_tx = X_tx_int / np.iinfo(np.int32).max
     P = np.mean(X_tx**2)
@@ -63,7 +71,6 @@ def run_decode():
     print(f"Total Errors (N): {N} out of 200,000")
     print(f"\n>>> FIGURE OF MERIT: {fom:.2f} <<<")
     
-    # Warn if the soft power constraint is violated
     if P > 0.00125:
         print("\nWARNING: Your average power P exceeds 0.00125!")
         print("The max(1, 800*P) denominator is actively penalizing your score.")

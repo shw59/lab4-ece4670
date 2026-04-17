@@ -1,12 +1,12 @@
 import numpy as np
 import scipy.io.wavfile as wav
-import scipy.fft as fft
+
 
 def enc(bits):
 
     # Parameters
     N = 1024 # size of each OFDM symbol
-    CP = 120 # cyclic prefix length
+    CP = 256 # cyclic prefix length
     FS = 44100 # sampling rate in Hz
     K = 350 # number of tones carrying data per symbol
     TARGET_POWER = 0.00125  # power constraint from lab
@@ -47,12 +47,12 @@ def enc(bits):
     # add cyclic prefix
     sync_symbol = np.concatenate([time_sync[-CP:], time_sync])
 
-    # build all 400 data symbols
+    # build all data symbols
     all_symbols = []
 
     for i in range(num_symbols):
 
-        # grab the 500 bits for this symbol
+        # grab the 350 bits for this symbol
         start = i * bits_per_symbol
         end   = start + bits_per_symbol
         bits_this_symbol = bits_padded[start:end]
