@@ -42,7 +42,7 @@ def enc(bits):
         freq_sync[N - k] = sync_phases[k]
 
     # convert to time domain
-    time_sync = np.real(np.fft.ifft(freq_sync))
+    time_sync = np.real(np.fft.ifft(freq_sync, norm='ortho'))
 
     # add cyclic prefix
     sync_symbol = np.concatenate([time_sync[-CP:], time_sync])
@@ -70,13 +70,13 @@ def enc(bits):
             freq_data[N - tone_index] = float(bit_value) * phase
 
         # convert to time domain
-        time_data = np.real(np.fft.ifft(freq_data))
+        time_data = np.real(np.fft.ifft(freq_data, norm='ortho'))
 
         # add cyclic prefix
         symbol_with_cp = np.concatenate([time_data[-CP:], time_data])
         all_symbols.append(symbol_with_cp)
 
-    # concatenate 2 sync symbols + 400 data symbols
+    # concatenate 2 sync symbols + rest of the symbols
     signal = np.concatenate([sync_symbol, sync_symbol] + all_symbols)
 
     # scale to meet power constraint
