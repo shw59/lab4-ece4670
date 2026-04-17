@@ -76,7 +76,7 @@ def enc(bits):
         symbol_with_cp = np.concatenate([time_data[-CP:], time_data])
         all_symbols.append(symbol_with_cp)
 
-    # concatenate 2 sync symbols + 400 data symbols
+    # concatenate 2 sync symbols + data symbols
     signal = np.concatenate([sync_symbol, sync_symbol] + all_symbols)
 
     # scale to meet power constraint
