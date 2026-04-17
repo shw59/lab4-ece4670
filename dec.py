@@ -5,7 +5,7 @@ def dec():
 
     # Parameters
     N = 1024           # FFT size
-    CP = 256           # cyclic prefix length
+    CP = 200        # cyclic prefix length
     FS = 44100         # sampling rate
     K = 350            # number of data tones per symbol
     

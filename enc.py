@@ -6,7 +6,7 @@ def enc(bits):
 
     # Parameters
     N = 1024 # size of each OFDM symbol
-    CP = 256 # cyclic prefix length
+    CP = 200 # cyclic prefix length
     FS = 44100 # sampling rate in Hz
     K = 350 # number of tones carrying data per symbol
     TARGET_POWER = 0.00125  # power constraint from lab
