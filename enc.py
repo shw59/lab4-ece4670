@@ -8,6 +8,7 @@ def enc(bits):
     CP = 200 # cyclic prefix length
     FS = 44100 # sampling rate
     K = 350 # number of tones/frequencies carrying data per symbol
+    M = 572 # number of OFDM symbols needed (200,000 bits / 350 bits per symbol)
     P = 0.00125  # power constraint
 
     # center the K tones around the highest gain frequency of ~7.5kHz so we use the highest gain channels
@@ -18,15 +19,11 @@ def enc(bits):
 
     # sort bins by distance to center bin, pick closest K, then sort ascending
     distances = np.abs(valid_bins - center_bin)
-    sorted_by_distance = valid_bins[np.argsort(distances)]
+    sorted_by_distance = valid_bins[np.lexsort((valid_bins, distances))] # sort by distances first, but pick lower index if same distance
     tone_idxs = np.sort(sorted_by_distance[:K])
 
-    # number of OFDM symbols needed
-    bits_per_symbol = K
-    num_symbols = int(np.ceil(len(bits) / bits_per_symbol))
-
     # pad bits just in case
-    bits_padded = np.zeros(num_symbols * bits_per_symbol, dtype=int)
+    bits_padded = np.zeros(M * K, dtype=int)
     bits_padded[0:len(bits)] = bits
 
     # build the sync symbol
@@ -51,11 +48,11 @@ def enc(bits):
     # build all data symbols
     all_symbols = []
 
-    for i in range(num_symbols):
+    for i in range(M):
 
         # grab the 350 bits for this symbol
-        start = i * bits_per_symbol
-        end   = start + bits_per_symbol
+        start = i * K
+        end   = start + K
         bits_this_symbol = bits_padded[start:end]
 
         # build frequency domain array for this symbol
