@@ -59,7 +59,7 @@ def run_decode():
     R = 200000 / duration_sec
     
     # Calculate Figure of Merit
-    numerator = min(R, 10000) * ((1 - N / 10000)**10)
+    numerator = min(R, 10000) * ((1 - N / 100000)**10)
     denominator = max(1, 800 * P)
     fom = numerator / denominator
     
